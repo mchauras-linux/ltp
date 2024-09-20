@@ -51,6 +51,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <stdint.h>
+#include <sys/prctl.h>
 
 #include "ebizzy.h"
 
@@ -71,6 +72,7 @@ static unsigned int verbose;
 static unsigned int linear;
 static unsigned int touch_pages;
 static unsigned int no_lib_memcpy;
+static unsigned int sched_core;
 
 /*
  * Other global variables
@@ -99,6 +101,7 @@ static void usage(void)
 		"-s <size>\t Size of memory chunks, in bytes\n"
 		"-S <seconds>\t Number of seconds to run\n"
 		"-t <num>\t Number of threads (2 * number cpus by default)\n"
+		"-c\t\t core scheduling enable (disabled by default)\n"
 		"-v[v[v]]\t Be verbose (more v's for more verbose)\n"
 		"-z\t\t Linear search instead of binary search\n", cmd);
 	exit(1);
@@ -132,7 +135,7 @@ static void read_options(int argc, char *argv[])
 	cmd = argv[0];
 	opterr = 1;
 
-	while ((c = getopt(argc, argv, "lmMn:pPRs:S:t:vzT")) != -1) {
+	while ((c = getopt(argc, argv, "lmMn:pPRs:S:t:vzTc")) != -1) {
 		switch (c) {
 		case 'l':
 			no_lib_memcpy = 1;
@@ -181,6 +184,9 @@ static void read_options(int argc, char *argv[])
 		case 'z':
 			linear = 1;
 			break;
+		case 'c':
+			sched_core = 1;
+			break;
 		default:
 			usage();
 		}
@@ -202,6 +208,7 @@ static void read_options(int argc, char *argv[])
 		printf("chunk_size %u\n", chunk_size);
 		printf("seconds %d\n", seconds);
 		printf("threads %u\n", threads);
+		printf("core scheduling %u\n", sched_core);
 		printf("verbose %u\n", verbose);
 		printf("linear %u\n", linear);
 		printf("touch_pages %u\n", touch_pages);
@@ -509,9 +516,24 @@ static void start_threads(void)
 	printf("sys  %5.2f s\n", sys_time.tv_sec + sys_time.tv_usec / 1e6);
 }
 
+static void enable_sched_core(int pid) {
+	int ret;
+	if (!sched_core)
+		return;
+
+	ret = prctl(PR_SCHED_CORE, PR_SCHED_CORE_CREATE, pid, 1, 0);
+  if (ret)
+    printf("Err: %d\tNot a core sched system\n", ret);
+
+  if (verbose)
+    printf("Core Scheduling enabled\n");
+}
+
 int main(int argc, char *argv[])
 {
 	read_options(argc, argv);
+
+	enable_sched_core(getpid());
 
 	allocate();
 
